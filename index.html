@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wardrobe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg: #1E1B18;
+    --surface: #2A2521;
+    --surface-2: #35302A;
+    --text: #F2E9D8;
+    --text-dim: #B4AA97;
+    --brass: #C6A15B;
+    --brass-dim: #8f7748;
+    --cool: #6E8F86;
+    --warm-acc: #C1613F;
+    --danger: #B5493A;
+    --border: rgba(242,233,216,0.12);
+    --radius: 14px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:60px;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:20px 16px 40px;}
+  header{padding:8px 0 20px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+  .brand{font-family:'Fraunces',serif;font-weight:600;font-size:2rem;letter-spacing:-0.01em;margin:0;}
+  .tagline{font-family:'Fraunces',serif;font-style:italic;font-weight:500;color:var(--text-dim);margin:4px 0 0;font-size:1rem;}
+  .signout{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;font-size:0.78rem;padding:7px 12px;cursor:pointer;margin-top:6px;white-space:nowrap;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:20px;}
+  .card h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.15rem;margin:0 0 14px;}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:0.68rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);margin-bottom:8px;}
+  .field{margin-bottom:18px;}
+  .field:last-child{margin-bottom:0;}
+
+  .temp-row{display:flex;align-items:center;gap:12px;}
+  input[type=range]{flex:1;-webkit-appearance:none;height:4px;border-radius:2px;background:linear-gradient(90deg, var(--cool), var(--brass) 50%, var(--warm-acc));outline:none;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--text);border:3px solid var(--bg);box-shadow:0 0 0 1px var(--border);cursor:pointer;}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--text);border:3px solid var(--bg);cursor:pointer;}
+  .temp-readout{font-family:'IBM Plex Mono',monospace;font-size:1.05rem;min-width:56px;text-align:right;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{font-family:'Inter',sans-serif;font-size:0.85rem;padding:7px 13px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text-dim);cursor:pointer;transition:border-color .15s, color .15s, background .15s;}
+  .chip.active{border-color:var(--brass);color:var(--bg);background:var(--brass);font-weight:600;}
+
+  textarea, input[type=text], input[type=email], input[type=password]{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.9rem;padding:10px 12px;resize:none;}
+  textarea:focus, input:focus, select:focus, button:focus-visible{outline:2px solid var(--brass);outline-offset:1px;}
+
+  .btn-primary{width:100%;background:var(--brass);color:#201c14;border:none;border-radius:10px;font-family:'Inter',sans-serif;font-weight:700;font-size:0.95rem;padding:13px;cursor:pointer;margin-top:16px;}
+  .btn-primary:active{background:var(--brass-dim);}
+  .btn-primary:disabled{opacity:0.5;cursor:default;}
+
+  #result-card{display:none;}
+  .result-reasoning{font-size:0.92rem;line-height:1.55;color:var(--text);margin-bottom:16px;}
+  .flatlay{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .flatlay-item{background:var(--surface-2);border-radius:10px;overflow:hidden;border:1px solid var(--border);}
+  .flatlay-item img{width:100%;aspect-ratio:1;object-fit:cover;display:block;}
+  .flatlay-item .cap{font-family:'IBM Plex Mono',monospace;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-dim);padding:5px 6px;}
+  .gaps-note{margin-top:14px;font-size:0.82rem;color:var(--warm-acc);line-height:1.5;}
+
+  .rail-section{margin-bottom:26px;}
+  .rail-section-title{font-family:'IBM Plex Mono',monospace;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin:0 0 6px 2px;}
+  .rod{height:5px;border-radius:3px;background:linear-gradient(90deg, var(--brass-dim), var(--brass) 15%, var(--brass) 85%, var(--brass-dim));position:relative;margin:0 6px 0;}
+  .rod::before, .rod::after{content:'';position:absolute;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:var(--brass);}
+  .rod::before{left:-6px;} .rod::after{right:-6px;}
+  .rail-scroll{display:flex;gap:16px;overflow-x:auto;padding:0 6px 8px;margin-top:2px;scrollbar-width:thin;}
+  .garment{flex:0 0 auto;width:88px;display:flex;flex-direction:column;align-items:center;position:relative;}
+  .hook{width:14px;height:14px;margin-top:-1px;}
+  .hook svg{width:100%;height:100%;color:var(--brass);}
+  .garment-thumb{width:80px;height:80px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border);margin-top:2px;}
+  .garment-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .garment-name{font-size:0.72rem;color:var(--text-dim);margin-top:6px;text-align:center;line-height:1.2;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .garment-remove{position:absolute;top:12px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(30,27,24,0.85);border:1px solid var(--border);color:var(--text-dim);font-size:0.7rem;line-height:16px;text-align:center;cursor:pointer;padding:0;}
+  .garment-add{flex:0 0 auto;width:80px;height:80px;margin-top:16px;border-radius:8px;border:1px dashed var(--border);background:transparent;color:var(--text-dim);font-size:1.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .empty-row{font-size:0.82rem;color:var(--text-dim);padding:16px 6px;}
+  .empty-row button{background:none;border:none;color:var(--brass);font-family:'Inter',sans-serif;font-size:0.82rem;text-decoration:underline;cursor:pointer;padding:0;}
+  .session-note{font-size:0.72rem;color:var(--text-dim);text-align:center;margin-top:24px;line-height:1.5;}
+
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:50;align-items:flex-end;justify-content:center;}
+  .overlay.open{display:flex;}
+  .modal{background:var(--surface);border-radius:16px 16px 0 0;padding:22px 18px 26px;width:100%;max-width:640px;max-height:88vh;overflow-y:auto;border-top:1px solid var(--border);}
+  .modal h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.1rem;margin:0 0 16px;}
+  select{width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.9rem;padding:10px 12px;}
+  .file-drop{border:1px dashed var(--border);border-radius:10px;padding:16px;text-align:center;color:var(--text-dim);font-size:0.85rem;cursor:pointer;position:relative;overflow:hidden;}
+  .file-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .file-preview{width:100%;max-height:160px;object-fit:contain;border-radius:8px;margin-top:10px;display:none;}
+  .modal-actions{display:flex;gap:10px;margin-top:20px;}
+  .btn-secondary{flex:1;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:10px;padding:12px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;}
+  .modal-actions .btn-primary{margin-top:0;flex:1.4;}
+
+  /* auth screen */
+  #auth-screen{max-width:400px;margin:60px auto 0;padding:0 16px;}
+  #auth-screen .card{margin-bottom:0;}
+  .auth-toggle{text-align:center;margin-top:14px;font-size:0.85rem;color:var(--text-dim);}
+  .auth-toggle button{background:none;border:none;color:var(--brass);text-decoration:underline;cursor:pointer;font-size:0.85rem;padding:0;}
+  .auth-error{color:var(--warm-acc);font-size:0.82rem;margin-top:10px;min-height:1em;}
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<div id="auth-screen">
+  <header style="display:block;text-align:center;">
+    <p class="brand">Wardrobe</p>
+    <p class="tagline">Tell me what's going on out there.</p>
+  </header>
+  <div class="card">
+    <h2 id="auth-title">Sign in</h2>
+    <div class="field">
+      <label for="auth-email">Email</label>
+      <input type="email" id="auth-email" autocomplete="email">
+    </div>
+    <div class="field">
+      <label for="auth-password">Password</label>
+      <input type="password" id="auth-password" autocomplete="current-password">
+    </div>
+    <button class="btn-primary" id="auth-submit">Sign in</button>
+    <div class="auth-error" id="auth-error"></div>
+    <div class="auth-toggle">
+      <span id="auth-toggle-text">New here?</span> <button id="auth-toggle-btn">Create an account</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap hidden" id="app-screen">
+
+  <header>
+    <div>
+      <p class="brand">Wardrobe</p>
+      <p class="tagline">Tell me what's going on out there.</p>
+    </div>
+    <button class="signout" id="signout-btn">Sign out</button>
+  </header>
+
+  <div class="card">
+    <h2>Today</h2>
+    <div class="field">
+      <label for="temp">Temperature</label>
+      <div class="temp-row">
+        <input type="range" id="temp" min="-10" max="105" value="62">
+        <span class="temp-readout" id="temp-readout">62°F</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>Conditions</label>
+      <div class="chips" id="condition-chips"></div>
+    </div>
+    <div class="field">
+      <label>Occasion</label>
+      <div class="chips" id="occasion-chips"></div>
+    </div>
+    <div class="field">
+      <label for="freetext">Or just tell me what's happening (optional)</label>
+      <textarea id="freetext" rows="2" placeholder="e.g. rainy interview downtown this afternoon"></textarea>
+    </div>
+    <button class="btn-primary" id="suggest-btn">What should I wear?</button>
+  </div>
+
+  <div class="card" id="result-card">
+    <h2>The pick</h2>
+    <p class="result-reasoning" id="result-reasoning"></p>
+    <div class="flatlay" id="result-flatlay"></div>
+    <div class="gaps-note" id="result-gaps"></div>
+  </div>
+
+  <div id="rails"></div>
+
+  <p class="session-note" id="loading-note">Loading your wardrobe…</p>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>Add a piece</h2>
+    <div class="field">
+      <label>Photo</label>
+      <div class="file-drop" id="file-drop">
+        <span id="file-drop-label">Tap to choose a photo</span>
+        <input type="file" accept="image/*" id="photo-input">
+      </div>
+      <img class="file-preview" id="file-preview">
+    </div>
+    <div class="field">
+      <label for="item-name">Name</label>
+      <input type="text" id="item-name" placeholder="e.g. grey wool sweater">
+    </div>
+    <div class="field">
+      <label for="item-category">Category</label>
+      <select id="item-category">
+        <option value="top">Top</option>
+        <option value="bottom">Bottom</option>
+        <option value="outerwear">Outerwear</option>
+        <option value="shoes">Shoes</option>
+        <option value="accessory">Accessory</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="item-warmth">Warmth</label>
+      <select id="item-warmth">
+        <option value="light">Light</option>
+        <option value="medium" selected>Medium</option>
+        <option value="heavy">Heavy</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="item-formality">Dress code</label>
+      <select id="item-formality">
+        <option value="casual" selected>Casual</option>
+        <option value="smart">Smart-casual</option>
+        <option value="business">Business</option>
+        <option value="formal">Formal</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="modal-cancel">Cancel</button>
+      <button class="btn-primary" id="modal-save">Add to wardrobe</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// STEP 1 OF SETUP: paste your Supabase project values here.
+// Find them in Supabase: Project Settings -> API
+// =====================================================================
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// =====================================================================
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const BUCKET = 'wardrobe-photos';
+
+const CATEGORIES = [
+  {key:'top', label:'Tops'},
+  {key:'bottom', label:'Bottoms'},
+  {key:'outerwear', label:'Outerwear'},
+  {key:'shoes', label:'Shoes'},
+  {key:'accessory', label:'Accessories'}
+];
+const WARMTH_SCALE = {light:0, medium:1, heavy:2};
+const FORMALITY_SCALE = {casual:0, smart:1, business:2, formal:3};
+const CONDITIONS = ['Clear','Cloudy','Rain','Snow','Windy'];
+const OCCASIONS = ['Casual','Work','Formal','Workout','Date night'];
+
+let wardrobe = [];
+let selectedCondition = 'Clear';
+let selectedOccasion = 'Casual';
+let pendingPhoto = null; // {file, dataUrlForPreview}
+let currentUser = null;
+
+// ---------------- AUTH ----------------
+let authMode = 'signin';
+const authTitle = document.getElementById('auth-title');
+const authSubmit = document.getElementById('auth-submit');
+const authToggleText = document.getElementById('auth-toggle-text');
+const authToggleBtn = document.getElementById('auth-toggle-btn');
+const authError = document.getElementById('auth-error');
+
+authToggleBtn.addEventListener('click', ()=>{
+  authMode = authMode === 'signin' ? 'signup' : 'signin';
+  authTitle.textContent = authMode === 'signin' ? 'Sign in' : 'Create your account';
+  authSubmit.textContent = authMode === 'signin' ? 'Sign in' : 'Create account';
+  authToggleText.textContent = authMode === 'signin' ? 'New here?' : 'Already have an account?';
+  authToggleBtn.textContent = authMode === 'signin' ? 'Create an account' : 'Sign in';
+  authError.textContent = '';
+});
+
+authSubmit.addEventListener('click', async ()=>{
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  authError.textContent = '';
+  if(!email || !password){ authError.textContent = 'Enter an email and password.'; return; }
+  authSubmit.disabled = true;
+  const fn = authMode === 'signin' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
+  const { data, error } = await fn.call(supabase.auth, { email, password });
+  authSubmit.disabled = false;
+  if(error){ authError.textContent = error.message; return; }
+  if(authMode === 'signup' && !data.session){
+    authError.textContent = 'Account created — check your email to confirm, then sign in.';
+  }
+});
+
+document.getElementById('signout-btn').addEventListener('click', ()=> supabase.auth.signOut());
+
+supabase.auth.onAuthStateChange((event, session)=>{
+  if(session && session.user){
+    currentUser = session.user;
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('app-screen').classList.remove('hidden');
+    loadWardrobe();
+  } else {
+    currentUser = null;
+    wardrobe = [];
+    document.getElementById('app-screen').classList.add('hidden');
+    document.getElementById('auth-screen').classList.remove('hidden');
+  }
+});
+
+// ---------------- header chips ----------------
+function buildChips(container, options, selectedGetter, selectedSetter){
+  container.innerHTML = '';
+  options.forEach(opt=>{
+    const chip = document.createElement('button');
+    chip.className = 'chip' + (selectedGetter()===opt ? ' active' : '');
+    chip.textContent = opt;
+    chip.type = 'button';
+    chip.addEventListener('click', ()=>{
+      selectedSetter(opt);
+      buildChips(container, options, selectedGetter, selectedSetter);
+    });
+    container.appendChild(chip);
+  });
+}
+buildChips(document.getElementById('condition-chips'), CONDITIONS, ()=>selectedCondition, v=>selectedCondition=v);
+buildChips(document.getElementById('occasion-chips'), OCCASIONS, ()=>selectedOccasion, v=>selectedOccasion=v);
+
+const tempSlider = document.getElementById('temp');
+const tempReadout = document.getElementById('temp-readout');
+tempSlider.addEventListener('input', ()=>{ tempReadout.textContent = tempSlider.value + '°F'; });
+
+function parseFreeText(text){
+  const t = text.toLowerCase();
+  const tempWords = [
+    [['freezing','frigid','arctic'], 15],[['cold','chilly','brisk'], 38],[['cool'], 55],
+    [['mild'], 65],[['warm'], 78],[['hot','scorching','sweltering'], 92]
+  ];
+  for(const [words,val] of tempWords){
+    if(words.some(w=>t.includes(w))){ tempSlider.value = val; tempReadout.textContent = val+'°F'; break; }
+  }
+  const condWords = {
+    Rain:['rain','rainy','drizzle','downpour'], Snow:['snow','snowy','blizzard'], Windy:['wind','windy','gusty'],
+    Cloudy:['cloud','overcast','grey sky','gray sky'], Clear:['sun','sunny','clear']
+  };
+  for(const [cond, words] of Object.entries(condWords)){
+    if(words.some(w=>t.includes(w))){ selectedCondition = cond; break; }
+  }
+  const occWords = {
+    Formal:['wedding','gala','formal','black tie'], Work:['interview','work','office','meeting','client'],
+    Workout:['gym','workout','run','hike','training'], 'Date night':['date']
+  };
+  for(const [occ, words] of Object.entries(occWords)){
+    if(words.some(w=>t.includes(w))){ selectedOccasion = occ; break; }
+  }
+  buildChips(document.getElementById('condition-chips'), CONDITIONS, ()=>selectedCondition, v=>selectedCondition=v);
+  buildChips(document.getElementById('occasion-chips'), OCCASIONS, ()=>selectedOccasion, v=>selectedOccasion=v);
+}
+
+// ---------------- data layer (Supabase) ----------------
+async function loadWardrobe(){
+  document.getElementById('loading-note').textContent = 'Loading your wardrobe…';
+  const { data, error } = await supabase.from('wardrobe_items').select('*').order('created_at', {ascending:true});
+  if(error){ document.getElementById('loading-note').textContent = 'Could not load your wardrobe: ' + error.message; return; }
+  wardrobe = data.map(row=>({
+    id: row.id, name: row.name, category: row.category, warmth: row.warmth,
+    formality: row.formality, dataUrl: row.image_url
+  }));
+  document.getElementById('loading-note').textContent = 'Signed in as ' + currentUser.email;
+  renderRails();
+}
+
+async function addWardrobeItem({file, name, category, warmth, formality}){
+  const path = `${currentUser.id}/${Date.now()}_${file.name}`;
+  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file);
+  if(uploadError) throw uploadError;
+  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  const { data, error } = await supabase.from('wardrobe_items').insert({
+    user_id: currentUser.id, name, category, warmth, formality,
+    image_url: urlData.publicUrl, image_path: path
+  }).select().single();
+  if(error) throw error;
+  return { id: data.id, name, category, warmth, formality, dataUrl: urlData.publicUrl };
+}
+
+async function removeWardrobeItem(item){
+  await supabase.from('wardrobe_items').delete().eq('id', item.id);
+}
+
+// ---------------- wardrobe rails ----------------
+function renderRails(){
+  const rails = document.getElementById('rails');
+  rails.innerHTML = '';
+  CATEGORIES.forEach(cat=>{
+    const items = wardrobe.filter(i=>i.category===cat.key);
+    const section = document.createElement('div');
+    section.className = 'rail-section';
+    const title = document.createElement('div');
+    title.className = 'rail-section-title';
+    title.textContent = cat.label;
+    section.appendChild(title);
+    const rod = document.createElement('div');
+    rod.className = 'rod';
+    section.appendChild(rod);
+
+    if(items.length===0){
+      const empty = document.createElement('div');
+      empty.className = 'empty-row';
+      empty.innerHTML = `No ${cat.label.toLowerCase()} yet — <button data-cat="${cat.key}">add your first piece</button>.`;
+      empty.querySelector('button').addEventListener('click', ()=>openModal(cat.key));
+      section.appendChild(empty);
+    } else {
+      const scroll = document.createElement('div');
+      scroll.className = 'rail-scroll';
+      items.forEach(item=>{
+        const g = document.createElement('div');
+        g.className = 'garment';
+        g.innerHTML = `
+          <button class="garment-remove" data-id="${item.id}" aria-label="Remove ${item.name}">✕</button>
+          <div class="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M6 20h12a2 2 0 0 0 1.5-3.3L12 8 4.5 16.7A2 2 0 0 0 6 20Z"/></svg></div>
+          <div class="garment-thumb"><img src="${item.dataUrl}" alt="${item.name}"></div>
+          <div class="garment-name">${item.name}</div>
+        `;
+        g.querySelector('.garment-remove').addEventListener('click', async ()=>{
+          await removeWardrobeItem(item);
+          wardrobe = wardrobe.filter(w=>w.id!==item.id);
+          renderRails();
+        });
+        scroll.appendChild(g);
+      });
+      const addTile = document.createElement('button');
+      addTile.className = 'garment-add';
+      addTile.textContent = '+';
+      addTile.addEventListener('click', ()=>openModal(cat.key));
+      scroll.appendChild(addTile);
+      section.appendChild(scroll);
+    }
+    rails.appendChild(section);
+  });
+}
+
+// ---------------- modal ----------------
+const overlay = document.getElementById('overlay');
+const photoInput = document.getElementById('photo-input');
+const filePreview = document.getElementById('file-preview');
+const fileDropLabel = document.getElementById('file-drop-label');
+
+function openModal(defaultCategory){
+  document.getElementById('item-category').value = defaultCategory || 'top';
+  document.getElementById('item-name').value = '';
+  document.getElementById('item-warmth').value = 'medium';
+  document.getElementById('item-formality').value = 'casual';
+  filePreview.style.display = 'none';
+  fileDropLabel.textContent = 'Tap to choose a photo';
+  pendingPhoto = null;
+  photoInput.value = '';
+  overlay.classList.add('open');
+}
+function closeModal(){ overlay.classList.remove('open'); }
+document.getElementById('modal-cancel').addEventListener('click', closeModal);
+overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeModal(); });
+
+photoInput.addEventListener('change', ()=>{
+  const file = photoInput.files[0];
+  if(!file) return;
+  pendingPhoto = file;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    filePreview.src = reader.result;
+    filePreview.style.display = 'block';
+    fileDropLabel.textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+});
+
+document.getElementById('modal-save').addEventListener('click', async ()=>{
+  const name = document.getElementById('item-name').value.trim();
+  if(!pendingPhoto){ fileDropLabel.textContent = 'Add a photo to continue'; return; }
+  if(!name){ document.getElementById('item-name').focus(); return; }
+  const saveBtn = document.getElementById('modal-save');
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+  try{
+    const item = await addWardrobeItem({
+      file: pendingPhoto, name,
+      category: document.getElementById('item-category').value,
+      warmth: document.getElementById('item-warmth').value,
+      formality: document.getElementById('item-formality').value
+    });
+    wardrobe.push(item);
+    closeModal();
+    renderRails();
+  }catch(e){
+    fileDropLabel.textContent = 'Something went wrong: ' + e.message;
+  }
+  saveBtn.disabled = false; saveBtn.textContent = 'Add to wardrobe';
+});
+
+// ---------------- outfit suggestion ----------------
+function pickBest(category, reqWarmth, reqFormality){
+  const items = wardrobe.filter(i=>i.category===category);
+  if(items.length===0) return {item:null, score:Infinity};
+  let best = null, bestScore = Infinity;
+  items.forEach(i=>{
+    const score = Math.abs(WARMTH_SCALE[i.warmth]-reqWarmth) + Math.abs(FORMALITY_SCALE[i.formality]-reqFormality);
+    if(score < bestScore){ bestScore = score; best = i; }
+  });
+  return {item:best, score:bestScore};
+}
+
+document.getElementById('suggest-btn').addEventListener('click', ()=>{
+  const freetext = document.getElementById('freetext').value.trim();
+  if(freetext) parseFreeText(freetext);
+
+  const temp = parseInt(tempSlider.value, 10);
+  const condition = selectedCondition;
+  const occasion = selectedOccasion;
+
+  let reqWarmth;
+  if(temp < 40) reqWarmth = 2; else if(temp < 60) reqWarmth = 1; else reqWarmth = 0;
+  const needOuterwear = temp < 60 || ['Rain','Snow','Windy'].includes(condition);
+  const formalityMap = {Casual:0, Workout:0, 'Date night':1, Work:2, Formal:3};
+  const reqFormality = formalityMap[occasion];
+
+  const picks = {};
+  const gaps = [];
+  ['top','bottom','shoes'].forEach(cat=>{
+    const {item, score} = pickBest(cat, reqWarmth, reqFormality);
+    if(item){ picks[cat] = item; if(score > 3) gaps.push(`Your ${cat} options are a stretch for this vibe — worth adding something closer.`); }
+    else gaps.push(`Nothing in ${cat}s yet — add a piece so I can complete the look.`);
+  });
+  if(needOuterwear){
+    const {item} = pickBest('outerwear', reqWarmth, reqFormality);
+    if(item) picks.outerwear = item;
+    else gaps.push(`It's cold or wet enough for a layer, but you don't have outerwear logged yet.`);
+  }
+  if(reqFormality >= 2){
+    const {item} = pickBest('accessory', reqWarmth, reqFormality);
+    if(item) picks.accessory = item;
+  }
+
+  const condLower = condition.toLowerCase();
+  let why = `It's ${temp}°F and ${condLower} out, and you're dressing for ${occasion.toLowerCase()}. `;
+  const pieces = [];
+  if(picks.top) pieces.push(picks.top.name);
+  if(picks.bottom) pieces.push(picks.bottom.name);
+  if(picks.outerwear) pieces.push(picks.outerwear.name);
+  if(picks.shoes) pieces.push(picks.shoes.name);
+  if(picks.accessory) pieces.push(picks.accessory.name);
+
+  if(pieces.length){
+    why += `Going with the ${pieces.join(', ')}`;
+    why += needOuterwear && picks.outerwear ? ` — the layer earns its spot given the ${condLower==='clear'?'temperature':condLower}.` : '.';
+  } else {
+    why = `It's ${temp}°F and ${condLower} out, dressing for ${occasion.toLowerCase()}, but your wardrobe's empty so far.`;
+  }
+
+  document.getElementById('result-reasoning').textContent = why;
+  const flatlay = document.getElementById('result-flatlay');
+  flatlay.innerHTML = '';
+  ['top','bottom','outerwear','shoes','accessory'].forEach(cat=>{
+    if(picks[cat]){
+      const div = document.createElement('div');
+      div.className = 'flatlay-item';
+      div.innerHTML = `<img src="${picks[cat].dataUrl}" alt="${picks[cat].name}"><div class="cap">${cat}</div>`;
+      flatlay.appendChild(div);
+    }
+  });
+  document.getElementById('result-gaps').innerHTML = gaps.map(g=>`⤷ ${g}`).join('<br>');
+  document.getElementById('result-card').style.display = 'block';
+  document.getElementById('result-card').scrollIntoView({behavior:'smooth', block:'start'});
+});
+</script>
+</body>
+</html>
