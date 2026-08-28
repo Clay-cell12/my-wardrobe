@@ -232,11 +232,11 @@
 // STEP 1 OF SETUP: paste your Supabase project values here.
 // Find them in Supabase: Project Settings -> API
 // =====================================================================
-   const SUPABASE_URL = 'https://mqxplcwvqyfteosyfrit.supabase.co';
-   const SUPABASE_ANON_KEY = 'sb_publishable_J052GcFvwLHIvM_MXIw78g_vdsumt3i';
+const SUPABASE_URL = 'https://mqxplcwvqyfteosyfrit.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_J052GcFvwLHIvM_MXIw78g_vdsumt3i';
 // =====================================================================
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const BUCKET = 'wardrobe-photos';
 
 const CATEGORIES = [
@@ -280,8 +280,8 @@ authSubmit.addEventListener('click', async ()=>{
   authError.textContent = '';
   if(!email || !password){ authError.textContent = 'Enter an email and password.'; return; }
   authSubmit.disabled = true;
-  const fn = authMode === 'signin' ? supabase.auth.signInWithPassword : supabase.auth.signUp;
-  const { data, error } = await fn.call(supabase.auth, { email, password });
+  const fn = authMode === 'signin' ? sb.auth.signInWithPassword : sb.auth.signUp;
+  const { data, error } = await fn.call(sb.auth, { email, password });
   authSubmit.disabled = false;
   if(error){ authError.textContent = error.message; return; }
   if(authMode === 'signup' && !data.session){
@@ -289,9 +289,9 @@ authSubmit.addEventListener('click', async ()=>{
   }
 });
 
-document.getElementById('signout-btn').addEventListener('click', ()=> supabase.auth.signOut());
+document.getElementById('signout-btn').addEventListener('click', ()=> sb.auth.signOut());
 
-supabase.auth.onAuthStateChange((event, session)=>{
+sb.auth.onAuthStateChange((event, session)=>{
   if(session && session.user){
     currentUser = session.user;
     document.getElementById('auth-screen').classList.add('hidden');
@@ -357,7 +357,7 @@ function parseFreeText(text){
 // ---------------- data layer (Supabase) ----------------
 async function loadWardrobe(){
   document.getElementById('loading-note').textContent = 'Loading your wardrobe…';
-  const { data, error } = await supabase.from('wardrobe_items').select('*').order('created_at', {ascending:true});
+  const { data, error } = await sb.from('wardrobe_items').select('*').order('created_at', {ascending:true});
   if(error){ document.getElementById('loading-note').textContent = 'Could not load your wardrobe: ' + error.message; return; }
   wardrobe = data.map(row=>({
     id: row.id, name: row.name, category: row.category, warmth: row.warmth,
@@ -369,10 +369,10 @@ async function loadWardrobe(){
 
 async function addWardrobeItem({file, name, category, warmth, formality}){
   const path = `${currentUser.id}/${Date.now()}_${file.name}`;
-  const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, file);
+  const { error: uploadError } = await sb.storage.from(BUCKET).upload(path, file);
   if(uploadError) throw uploadError;
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  const { data, error } = await supabase.from('wardrobe_items').insert({
+  const { data: urlData } = sb.storage.from(BUCKET).getPublicUrl(path);
+  const { data, error } = await sb.from('wardrobe_items').insert({
     user_id: currentUser.id, name, category, warmth, formality,
     image_url: urlData.publicUrl, image_path: path
   }).select().single();
@@ -381,7 +381,7 @@ async function addWardrobeItem({file, name, category, warmth, formality}){
 }
 
 async function removeWardrobeItem(item){
-  await supabase.from('wardrobe_items').delete().eq('id', item.id);
+  await sb.from('wardrobe_items').delete().eq('id', item.id);
 }
 
 // ---------------- wardrobe rails ----------------
