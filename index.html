@@ -95,6 +95,27 @@
   .file-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;}
   .file-preview{width:100%;max-height:160px;object-fit:contain;border-radius:8px;margin-top:10px;display:none;}
   .modal-actions{display:flex;gap:10px;margin-top:20px;}
+  .field-row{display:flex;gap:10px;}
+  .field-row .field{flex:1;}
+
+  /* stars */
+  .stars{display:flex;gap:2px;}
+  .star{cursor:pointer;color:var(--border);font-size:0.95rem;line-height:1;background:none;border:none;padding:0;}
+  .star.filled{color:var(--brass);}
+
+  /* garment meta additions */
+  .garment{padding-bottom:2px;}
+  .garment.dirty .garment-thumb img{opacity:0.35;filter:grayscale(60%);}
+  .garment-dirty-badge{position:absolute;top:34px;left:2px;background:rgba(30,27,24,0.85);color:var(--warm-acc);font-family:'IBM Plex Mono',monospace;font-size:0.55rem;text-transform:uppercase;letter-spacing:0.03em;padding:2px 5px;border-radius:4px;border:1px solid var(--border);}
+  .garment-meta{font-size:0.62rem;color:var(--text-dim);text-align:center;margin-top:2px;}
+  .garment-wash-btn{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:6px;font-size:0.6rem;padding:2px 6px;margin-top:4px;cursor:pointer;}
+
+  /* match confidence */
+  .confidence{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:0.72rem;padding:3px 9px;border-radius:999px;margin-bottom:10px;border:1px solid var(--border);}
+  .confidence.high{color:var(--cool);border-color:var(--cool);}
+  .confidence.mid{color:var(--brass);border-color:var(--brass);}
+  .confidence.low{color:var(--warm-acc);border-color:var(--warm-acc);}
+  .wear-btn{margin-top:14px;}
   .btn-secondary{flex:1;background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:10px;padding:12px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;}
   .modal-actions .btn-primary{margin-top:0;flex:1.4;}
 
@@ -168,9 +189,11 @@
 
   <div class="card" id="result-card">
     <h2>The pick</h2>
+    <div class="confidence" id="result-confidence"></div>
     <p class="result-reasoning" id="result-reasoning"></p>
     <div class="flatlay" id="result-flatlay"></div>
     <div class="gaps-note" id="result-gaps"></div>
+    <button class="btn-primary wear-btn" id="wore-this-btn">I wore this</button>
   </div>
 
   <div id="rails"></div>
@@ -218,6 +241,24 @@
         <option value="smart">Smart-casual</option>
         <option value="business">Business</option>
         <option value="formal">Formal</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="item-brand">Brand (optional)</label>
+        <input type="text" id="item-brand" placeholder="e.g. Uniqlo">
+      </div>
+      <div class="field">
+        <label for="item-size">Size (optional)</label>
+        <input type="text" id="item-size" placeholder="e.g. M">
+      </div>
+    </div>
+    <div class="field">
+      <label for="item-fit">How it actually fits</label>
+      <select id="item-fit">
+        <option value="runs_small">Runs small / tight</option>
+        <option value="true_to_size" selected>True to size</option>
+        <option value="runs_large">Runs large / loose</option>
       </select>
     </div>
     <div class="modal-actions">
@@ -355,33 +396,67 @@ function parseFreeText(text){
 }
 
 // ---------------- data layer (Supabase) ----------------
+function rowToItem(row){
+  return {
+    id: row.id, name: row.name, category: row.category, warmth: row.warmth,
+    formality: row.formality, dataUrl: row.image_url,
+    brand: row.brand || '', size: row.size || '', fit: row.fit || 'true_to_size',
+    rating: row.rating || 0, wearCount: row.wear_count || 0, isDirty: !!row.is_dirty
+  };
+}
+
 async function loadWardrobe(){
   document.getElementById('loading-note').textContent = 'Loading your wardrobe…';
   const { data, error } = await sb.from('wardrobe_items').select('*').order('created_at', {ascending:true});
   if(error){ document.getElementById('loading-note').textContent = 'Could not load your wardrobe: ' + error.message; return; }
-  wardrobe = data.map(row=>({
-    id: row.id, name: row.name, category: row.category, warmth: row.warmth,
-    formality: row.formality, dataUrl: row.image_url
-  }));
+  wardrobe = data.map(rowToItem);
   document.getElementById('loading-note').textContent = 'Signed in as ' + currentUser.email;
   renderRails();
 }
 
-async function addWardrobeItem({file, name, category, warmth, formality}){
+async function addWardrobeItem({file, name, category, warmth, formality, brand, size, fit}){
   const path = `${currentUser.id}/${Date.now()}_${file.name}`;
   const { error: uploadError } = await sb.storage.from(BUCKET).upload(path, file);
   if(uploadError) throw uploadError;
   const { data: urlData } = sb.storage.from(BUCKET).getPublicUrl(path);
   const { data, error } = await sb.from('wardrobe_items').insert({
     user_id: currentUser.id, name, category, warmth, formality,
-    image_url: urlData.publicUrl, image_path: path
+    image_url: urlData.publicUrl, image_path: path,
+    brand: brand || null, size: size || null, fit: fit || 'true_to_size',
+    rating: 0, wear_count: 0, is_dirty: false
   }).select().single();
   if(error) throw error;
-  return { id: data.id, name, category, warmth, formality, dataUrl: urlData.publicUrl };
+  return rowToItem(data);
 }
 
 async function removeWardrobeItem(item){
   await sb.from('wardrobe_items').delete().eq('id', item.id);
+}
+
+async function setRating(item, rating){
+  item.rating = rating;
+  renderRails();
+  await sb.from('wardrobe_items').update({ rating }).eq('id', item.id);
+}
+
+async function toggleDirty(item){
+  item.isDirty = !item.isDirty;
+  renderRails();
+  await sb.from('wardrobe_items').update({ is_dirty: item.isDirty }).eq('id', item.id);
+}
+
+async function logWear(items){
+  const now = new Date().toISOString();
+  for(const item of items){
+    item.wearCount = (item.wearCount || 0) + 1;
+    item.isDirty = true;
+  }
+  renderRails();
+  for(const item of items){
+    await sb.from('wardrobe_items').update({
+      wear_count: item.wearCount, is_dirty: true, last_worn: now
+    }).eq('id', item.id);
+  }
 }
 
 // ---------------- wardrobe rails ----------------
@@ -411,18 +486,32 @@ function renderRails(){
       scroll.className = 'rail-scroll';
       items.forEach(item=>{
         const g = document.createElement('div');
-        g.className = 'garment';
+        g.className = 'garment' + (item.isDirty ? ' dirty' : '');
+        const metaBits = [item.brand, item.size].filter(Boolean).join(' · ');
+        const stars = [1,2,3,4,5].map(n=>`<button class="star ${n<=item.rating?'filled':''}" data-n="${n}">★</button>`).join('');
         g.innerHTML = `
           <button class="garment-remove" data-id="${item.id}" aria-label="Remove ${item.name}">✕</button>
           <div class="hook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M6 20h12a2 2 0 0 0 1.5-3.3L12 8 4.5 16.7A2 2 0 0 0 6 20Z"/></svg></div>
           <div class="garment-thumb"><img src="${item.dataUrl}" alt="${item.name}"></div>
+          ${item.isDirty ? '<div class="garment-dirty-badge">In wash</div>' : ''}
           <div class="garment-name">${item.name}</div>
+          ${metaBits ? `<div class="garment-meta">${metaBits}</div>` : ''}
+          <div class="stars">${stars}</div>
+          <div class="garment-meta">Worn ${item.wearCount || 0}×</div>
+          <button class="garment-wash-btn">${item.isDirty ? 'Mark clean' : 'Mark dirty'}</button>
         `;
         g.querySelector('.garment-remove').addEventListener('click', async ()=>{
           await removeWardrobeItem(item);
           wardrobe = wardrobe.filter(w=>w.id!==item.id);
           renderRails();
         });
+        g.querySelectorAll('.star').forEach(starBtn=>{
+          starBtn.addEventListener('click', ()=>{
+            const n = parseInt(starBtn.dataset.n, 10);
+            setRating(item, item.rating === n ? 0 : n);
+          });
+        });
+        g.querySelector('.garment-wash-btn').addEventListener('click', ()=> toggleDirty(item));
         scroll.appendChild(g);
       });
       const addTile = document.createElement('button');
@@ -447,6 +536,9 @@ function openModal(defaultCategory){
   document.getElementById('item-name').value = '';
   document.getElementById('item-warmth').value = 'medium';
   document.getElementById('item-formality').value = 'casual';
+  document.getElementById('item-brand').value = '';
+  document.getElementById('item-size').value = '';
+  document.getElementById('item-fit').value = 'true_to_size';
   filePreview.style.display = 'none';
   fileDropLabel.textContent = 'Tap to choose a photo';
   pendingPhoto = null;
@@ -481,7 +573,10 @@ document.getElementById('modal-save').addEventListener('click', async ()=>{
       file: pendingPhoto, name,
       category: document.getElementById('item-category').value,
       warmth: document.getElementById('item-warmth').value,
-      formality: document.getElementById('item-formality').value
+      formality: document.getElementById('item-formality').value,
+      brand: document.getElementById('item-brand').value.trim(),
+      size: document.getElementById('item-size').value.trim(),
+      fit: document.getElementById('item-fit').value
     });
     wardrobe.push(item);
     closeModal();
@@ -493,15 +588,21 @@ document.getElementById('modal-save').addEventListener('click', async ()=>{
 });
 
 // ---------------- outfit suggestion ----------------
+let lastPickedItems = [];
+
 function pickBest(category, reqWarmth, reqFormality){
-  const items = wardrobe.filter(i=>i.category===category);
-  if(items.length===0) return {item:null, score:Infinity};
+  const all = wardrobe.filter(i=>i.category===category);
+  if(all.length===0) return {item:null, score:Infinity, allDirty:false};
+  const clean = all.filter(i=>!i.isDirty);
+  const pool = clean.length > 0 ? clean : all;
+  const allDirty = clean.length === 0;
   let best = null, bestScore = Infinity;
-  items.forEach(i=>{
-    const score = Math.abs(WARMTH_SCALE[i.warmth]-reqWarmth) + Math.abs(FORMALITY_SCALE[i.formality]-reqFormality);
+  pool.forEach(i=>{
+    let score = Math.abs(WARMTH_SCALE[i.warmth]-reqWarmth) + Math.abs(FORMALITY_SCALE[i.formality]-reqFormality);
+    score -= ((i.rating || 0) - 3) * 0.15; // nudge toward pieces you rate highly
     if(score < bestScore){ bestScore = score; best = i; }
   });
-  return {item:best, score:bestScore};
+  return {item:best, score:bestScore, allDirty};
 }
 
 document.getElementById('suggest-btn').addEventListener('click', ()=>{
@@ -520,19 +621,24 @@ document.getElementById('suggest-btn').addEventListener('click', ()=>{
 
   const picks = {};
   const gaps = [];
+  const scores = [];
   ['top','bottom','shoes'].forEach(cat=>{
-    const {item, score} = pickBest(cat, reqWarmth, reqFormality);
-    if(item){ picks[cat] = item; if(score > 3) gaps.push(`Your ${cat} options are a stretch for this vibe — worth adding something closer.`); }
+    const {item, score, allDirty} = pickBest(cat, reqWarmth, reqFormality);
+    if(item){
+      picks[cat] = item; scores.push(Math.max(score,0));
+      if(allDirty) gaps.push(`All your ${cat}s are marked dirty — using one anyway, but a load of laundry would help.`);
+      else if(score > 3) gaps.push(`Your ${cat} options are a stretch for this vibe — worth adding something closer.`);
+    }
     else gaps.push(`Nothing in ${cat}s yet — add a piece so I can complete the look.`);
   });
   if(needOuterwear){
-    const {item} = pickBest('outerwear', reqWarmth, reqFormality);
-    if(item) picks.outerwear = item;
+    const {item, score, allDirty} = pickBest('outerwear', reqWarmth, reqFormality);
+    if(item){ picks.outerwear = item; scores.push(Math.max(score,0)); if(allDirty) gaps.push(`Your outerwear is all dirty — using it anyway.`); }
     else gaps.push(`It's cold or wet enough for a layer, but you don't have outerwear logged yet.`);
   }
   if(reqFormality >= 2){
-    const {item} = pickBest('accessory', reqWarmth, reqFormality);
-    if(item) picks.accessory = item;
+    const {item, score} = pickBest('accessory', reqWarmth, reqFormality);
+    if(item){ picks.accessory = item; scores.push(Math.max(score,0)); }
   }
 
   const condLower = condition.toLowerCase();
@@ -551,6 +657,15 @@ document.getElementById('suggest-btn').addEventListener('click', ()=>{
     why = `It's ${temp}°F and ${condLower} out, dressing for ${occasion.toLowerCase()}, but your wardrobe's empty so far.`;
   }
 
+  lastPickedItems = Object.values(picks);
+  const avgScore = scores.length ? scores.reduce((a,b)=>a+b,0)/scores.length : 5;
+  const pct = Math.max(0, Math.min(100, Math.round(100 - (avgScore/5)*100)));
+  const confEl = document.getElementById('result-confidence');
+  confEl.textContent = pct + '% match';
+  confEl.className = 'confidence ' + (pct >= 75 ? 'high' : pct >= 45 ? 'mid' : 'low');
+  document.getElementById('wore-this-btn').textContent = 'I wore this';
+  document.getElementById('wore-this-btn').disabled = lastPickedItems.length === 0;
+
   document.getElementById('result-reasoning').textContent = why;
   const flatlay = document.getElementById('result-flatlay');
   flatlay.innerHTML = '';
@@ -565,6 +680,14 @@ document.getElementById('suggest-btn').addEventListener('click', ()=>{
   document.getElementById('result-gaps').innerHTML = gaps.map(g=>`⤷ ${g}`).join('<br>');
   document.getElementById('result-card').style.display = 'block';
   document.getElementById('result-card').scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+document.getElementById('wore-this-btn').addEventListener('click', async ()=>{
+  if(lastPickedItems.length === 0) return;
+  const btn = document.getElementById('wore-this-btn');
+  btn.disabled = true; btn.textContent = 'Logging…';
+  await logWear(lastPickedItems);
+  btn.textContent = 'Logged — these are in the wash now';
 });
 </script>
 </body>
